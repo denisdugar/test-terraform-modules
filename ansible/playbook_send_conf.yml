@@ -1,0 +1,10 @@
+---
+- name: Configurate kibana
+  hosts: all
+  become: yes
+
+  tasks:
+  - name: Copy hosts configure
+    ansible.builtin.copy:
+      src: ./conf/hosts
+      dest: /etc
