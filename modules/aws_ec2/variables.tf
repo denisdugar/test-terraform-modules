@@ -3,35 +3,39 @@ variable "instance_count"{
 }
 
 variable "instance_type"{
-    default = ""
+    default = "t2.micro"
 }
 
 variable "key"{
-    default = ""
+    type = string
 }
 
 variable "subnet_id"{
-    default = ""
+    type = string
 }
 
 variable "user_data"{
-    default = ""
+    type = string
 }
 
 variable "vpc_sg_ids"{
-    default = []
-}
-
-variable "http_endpoint"{
-    default = "enabled"
-}
-
-variable "instance_metadata_tags"{
-    default = "enabled"
+    type = list
 }
 
 variable "name"{
     default = "test"
+}
+
+variable "owner"{
+    type = string
+}
+
+variable "email"{
+    type = string
+}
+
+variable "env"{
+    type = string
 }
 
 variable "command"{

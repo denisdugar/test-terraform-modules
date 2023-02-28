@@ -12,43 +12,55 @@ provider "aws" {
   region  = "us-east-1"
 }
 
-module "aws_wordpress"{
-  source = "./modules/aws_autoscaling"
-  sg_id = [module.aws_sg_wordpress.sg_id]
-  key   = "wordpress-key"
-  instance_type = "t2.micro"
-  user_data = module.aws_user_data_wordpress.user_data
-  subnet_ids = [module.aws_network.private_subnet1_id, module.aws_network.private_subnet2_id]
+locals {
+  common_tags = {
+    owner = "Denis Dugar"
+    email = "denisdugar@gmail.com"
+    env   = "prod"
+  }
 }
 
-module "aws_bastion_ec2" {
-  source     = "./modules/aws_ec2"
-  subnet_id  = module.aws_network.public_subnet1_id
-  user_data  = module.aws_user_data_bastion.user_data
-  key        = "bastion-key"
+############################################## EC2 INSTANCES ##############################################
+module "aws_wordpress" {
+  source        = "./modules/aws_autoscaling"
+  sg_id         = [module.aws_sg_wordpress.sg_id]
+  key           = "wordpress-key"
   instance_type = "t2.micro"
-  vpc_sg_ids = [module.aws_sg_bastion.sg_id]
-  name       = "bastion"
-  command    = <<-EOT
+  user_data     = module.aws_user_data_wordpress.user_data
+  subnet_ids    = [module.aws_network.private_subnet1_id, module.aws_network.private_subnet2_id]
+}
+
+module "aws_ec2_bastion" {
+  source        = "./modules/aws_ec2"
+  instance_type = "t2.micro"
+  key           = "bastion-key"
+  subnet_id     = module.aws_network.public_subnet1_id
+  user_data     = module.aws_user_data_bastion.user_data
+  vpc_sg_ids    = [module.aws_sg_bastion.sg_id]
+  name          = "bastion"
+  owner         = local.common_tags.owner
+  email         = local.common_tags.email
+  env           = local.common_tags.env
+  command       = <<-EOT
   echo "$(aws ec2 describe-instances --region us-east-1 --instance-ids $(aws autoscaling describe-auto-scaling-instances --region us-east-1 --output text \
 --query "AutoScalingInstances[?AutoScalingGroupName=='${module.aws_wordpress.name}'].InstanceId") --query "Reservations[].Instances[].PrivateIpAddress" --output text)" > ./ansible/hosts.txt
     sed -i.bak 's/\t/\n/g' ./ansible/hosts.txt
-  echo "${module.aws_master_ec2[0].private_ip}
-  ${module.aws_master_ec2[1].private_ip}
-  ${module.aws_nodes_ec2[0].private_ip}
-  ${module.aws_nodes_ec2[1].private_ip}
-  ${module.aws_nodes_ec2[2].private_ip}
-  ${module.aws_nodes_ec2[3].private_ip}
-  ${module.aws_logstash_ec2[0].private_ip}
-  ${module.aws_logstash_ec2[1].private_ip}
-  ${module.aws_kibana_ec2.public_ip}" > ./ansible/hosts.txt
+  echo "${module.aws_ec2_master[0].private_ip}
+  ${module.aws_ec2_master[1].private_ip}
+  ${module.aws_ec2_nodes[0].private_ip}
+  ${module.aws_ec2_nodes[1].private_ip}
+  ${module.aws_ec2_nodes[2].private_ip}
+  ${module.aws_ec2_nodes[3].private_ip}
+  ${module.aws_ec2_logstash[0].private_ip}
+  ${module.aws_ec2_logstash[1].private_ip}
+  ${module.aws_ec2_kibana.public_ip}" > ./ansible/hosts.txt
   echo "127.0.0.1 localhost
-  ${module.aws_master_ec2[0].private_ip}  ${module.aws_master_ec2[0].tag_Name}
-  ${module.aws_master_ec2[1].private_ip}  ${module.aws_master_ec2[1].tag_Name}
-  ${module.aws_nodes_ec2[0].private_ip}  ${module.aws_nodes_ec2[0].tag_Name}
-  ${module.aws_nodes_ec2[1].private_ip}  ${module.aws_nodes_ec2[1].tag_Name}
-  ${module.aws_nodes_ec2[2].private_ip}  ${module.aws_nodes_ec2[2].tag_Name}
-  ${module.aws_nodes_ec2[3].private_ip}  ${module.aws_nodes_ec2[3].tag_Name}
+  ${module.aws_ec2_master[0].private_ip}  ${module.aws_ec2_master[0].tag_Name}
+  ${module.aws_ec2_master[1].private_ip}  ${module.aws_ec2_master[1].tag_Name}
+  ${module.aws_ec2_nodes[0].private_ip}  ${module.aws_ec2_nodes[0].tag_Name}
+  ${module.aws_ec2_nodes[1].private_ip}  ${module.aws_ec2_nodes[1].tag_Name}
+  ${module.aws_ec2_nodes[2].private_ip}  ${module.aws_ec2_nodes[2].tag_Name}
+  ${module.aws_ec2_nodes[3].private_ip}  ${module.aws_ec2_nodes[3].tag_Name}
   ::1     ip6-localhost ip6-loopback 
   fe00::0 ip6-localnet 
   ff00::0 ip6-mcastprefix 
@@ -57,59 +69,73 @@ module "aws_bastion_ec2" {
   EOT
 }
 
-module "aws_kibana_ec2" {
+module "aws_ec2_kibana" {
   source                 = "./modules/aws_ec2"
+  instance_type          = "t2.micro"
+  key                    = "wordpress-key"
   subnet_id              = module.aws_network.public_subnet1_id
   user_data              = module.aws_user_data_kibana.user_data
   vpc_sg_ids             = [module.aws_sg_kibana.sg_id]
-  key   = "wordpress-key"
-  instance_type = "t2.micro"
   name                   = "kibana"
-  http_endpoint          = "enabled"
-  instance_metadata_tags = "enabled"
+  owner                  = local.common_tags.owner
+  email                  = local.common_tags.email
+  env                    = local.common_tags.env
 }
 
-module "aws_logstash_ec2" {
+module "aws_ec2_logstash" {
   source                 = "./modules/aws_ec2"
   count                  = 2
+  instance_type          = "t2.micro"
+  key                    = "wordpress-key"
   subnet_id              = element([module.aws_network.private_subnet1_id, module.aws_network.private_subnet2_id], count.index)
   user_data              = module.aws_user_data_logstash.user_data
   vpc_sg_ids             = [module.aws_sg_es.sg_id]
-  key   = "wordpress-key"
-  instance_type = "t2.micro"
   name                   = "logstash"
-  http_endpoint          = "enabled"
-  instance_metadata_tags = "enabled"
+  owner                  = local.common_tags.owner
+  email                  = local.common_tags.email
+  env                    = local.common_tags.env
 }
 
-module "aws_master_ec2" {
+module "aws_ec2_master" {
   source                 = "./modules/aws_ec2"
   count                  = 2
-  subnet_id              = module.aws_network.private_subnet1_id
+  instance_type          = "t2.medium"
+  key                    = "wordpress-key"
+  subnet_id              = element([module.aws_network.private_subnet1_id, module.aws_network.private_subnet2_id], count.index)
   user_data              = module.aws_user_data_master.user_data
   vpc_sg_ids             = [module.aws_sg_es.sg_id]
-  key   = "wordpress-key"
-  instance_type = "t2.medium"
   name                   = "master${count.index}"
-  http_endpoint          = "enabled"
-  instance_metadata_tags = "enabled"
+  owner                  = local.common_tags.owner
+  email                  = local.common_tags.email
+  env                    = local.common_tags.env
 }
 
-module "aws_nodes_ec2" {
-  source                 = "./modules/aws_ec2"
-  count                  = 4
-  subnet_id              = element([module.aws_network.private_subnet1_id, module.aws_network.private_subnet2_id, module.aws_network.private_subnet1_id, module.aws_network.private_subnet2_id], count.index)
-  user_data              = module.aws_user_data_nodes.user_data
-  vpc_sg_ids             = [module.aws_sg_es.sg_id]
-  key   = "wordpress-key"
+module "aws_ec2_nodes" {
+  source        = "./modules/aws_ec2"
+  count         = 4
   instance_type = "t2.medium"
-  name                   = "node${count.index}"
+  key           = "wordpress-key"
+  subnet_id     = element([module.aws_network.private_subnet1_id, module.aws_network.private_subnet2_id, module.aws_network.private_subnet1_id, module.aws_network.private_subnet2_id], count.index)
+  user_data     = module.aws_user_data_nodes.user_data
+  vpc_sg_ids    = [module.aws_sg_es.sg_id]
+  name          = "node${count.index}"
+  owner         = local.common_tags.owner
+  email         = local.common_tags.email
+  env           = local.common_tags.env
 }
+############################################################################################
 
+
+############################################## NETWORK ##############################################
 module "aws_network" {
   source = "./modules/aws_network"
+  owner         = local.common_tags.owner
+  email         = local.common_tags.email
+  env           = local.common_tags.env
 }
+############################################################################################
 
+############################################## USER DATA ##############################################
 module "aws_user_data_bastion" {
   source    = "./modules/aws_user_data"
   user_data = "user_data_bastion.sh"
@@ -119,12 +145,12 @@ module "aws_user_data_wordpress" {
   source    = "./modules/aws_user_data"
   user_data = "user_data_wordpress.sh"
   data_vars = {
-    db_endpoint = "${module.aws_database.db_endpoint}"
+    db_endpoint  = "${module.aws_database.db_endpoint}"
     efs_endpoint = "${module.aws_efs.efs_endpoint}"
-    db_username = "${module.db_secrets.secret.username}"
-    db_password = "${module.db_secrets.secret.password}"
-    ip_logstash0 = "${module.aws_logstash_ec2[0].private_ip}"
-    ip_logstash1 = "${module.aws_logstash_ec2[1].private_ip}"
+    db_username  = "${module.db_secrets.secret.username}"
+    db_password  = "${module.db_secrets.secret.password}"
+    ip_logstash0 = "${module.aws_ec2_logstash[0].private_ip}"
+    ip_logstash1 = "${module.aws_ec2_logstash[1].private_ip}"
   }
 }
 
@@ -147,7 +173,10 @@ module "aws_user_data_nodes" {
   source    = "./modules/aws_user_data"
   user_data = "user_data_nodes.sh"
 }
+############################################################################################
 
+
+############################################## SECURITY GROUPS ##############################################
 module "aws_sg_es" {
   source        = "./modules/aws_sg"
   name          = "es"
@@ -200,33 +229,43 @@ module "aws_sg_alb" {
   ingress_ports = ["80", "443"]
   sg_ids        = [module.aws_sg_bastion.sg_id]
 }
+############################################################################################
 
-module "aws_database"{
-  source = "./modules/aws_database"
-  name = "wordpress"
-  db_username = module.db_secrets.secret.username
-  db_password = module.db_secrets.secret.password
-  subnet_ids = [module.aws_network.private_subnet1_id, module.aws_network.private_subnet2_id]
+
+############################################## DATABASE ##############################################
+module "aws_database" {
+  source                 = "./modules/aws_database"
+  name                   = "wordpress"
+  db_username            = module.db_secrets.secret.username
+  db_password            = module.db_secrets.secret.password
+  subnet_ids             = [module.aws_network.private_subnet1_id, module.aws_network.private_subnet2_id]
   vpc_security_group_ids = [module.aws_sg_rds.sg_id]
 }
 
-module "db_secrets"{
-  source = "./modules/aws_secrets_data"
+module "db_secrets" {
+  source    = "./modules/aws_secrets_data"
   secret_id = "db_creds"
 }
+############################################################################################
 
-module "aws_efs"{
+############################################## EFS ##############################################
+module "aws_efs" {
   source = "./modules/aws_efs"
 }
+############################################################################################
 
-module "aws_alb"{
-  source = "./modules/aws_lb"
-  sg_id = [module.aws_sg_alb.sg_id]
-  subnet_ids = [module.aws_network.public_subnet1_id, module.aws_network.public_subnet2_id]
-  vpc_id = module.aws_network.vpc_id
+############################################## LOAD BALANCER ##############################################
+module "aws_alb" {
+  source         = "./modules/aws_lb"
+  sg_id          = [module.aws_sg_alb.sg_id]
+  subnet_ids     = [module.aws_network.public_subnet1_id, module.aws_network.public_subnet2_id]
+  vpc_id         = module.aws_network.vpc_id
   autoscaling_id = module.aws_wordpress.autoscaling_id
 }
+############################################################################################
 
-output "kibana_ip"{
-  value = module.aws_kibana_ec2.public_ip
+############################################## OUTPUT ##############################################
+output "kibana_ip" {
+  value = module.aws_ec2_kibana.public_ip
 }
+############################################################################################

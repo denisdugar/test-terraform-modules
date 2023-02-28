@@ -15,12 +15,11 @@ resource "aws_instance" "app_server" {
   subnet_id              = var.subnet_id
   user_data              = var.user_data
   vpc_security_group_ids = var.vpc_sg_ids
-  metadata_options {
-    http_endpoint = var.http_endpoint
-    instance_metadata_tags = var.instance_metadata_tags
-  }
   tags = {
     Name = var.name
+    Owner = var.owner
+    email = var.email
+    env = var.env
   }
   provisioner "local-exec"{
     command = var.command
