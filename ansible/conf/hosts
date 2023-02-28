@@ -1,10 +1,10 @@
 127.0.0.1 localhost
-  10.0.11.172  master0
-  10.0.11.191  master1
-  10.0.11.91  node0
-  10.0.21.72  node1
-  10.0.11.225  node2
-  10.0.21.44  node3
+  10.0.11.136  master0
+  10.0.11.112  master1
+  10.0.11.121  node0
+  10.0.21.174  node1
+  10.0.11.31  node2
+  10.0.21.195  node3
   ::1     ip6-localhost ip6-loopback 
   fe00::0 ip6-localnet 
   ff00::0 ip6-mcastprefix 

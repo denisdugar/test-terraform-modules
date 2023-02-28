@@ -227,10 +227,6 @@ module "aws_alb"{
   autoscaling_id = module.aws_wordpress.autoscaling_id
 }
 
-output "bastion_ip"{
-  value = module.aws_bastion_ec2.public_ip
-}
-
 output "kibana_ip"{
   value = module.aws_kibana_ec2.public_ip
 }
