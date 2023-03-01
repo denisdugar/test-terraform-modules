@@ -20,31 +20,13 @@ locals {
   }
 }
 
-############################################## EC2 INSTANCES ##############################################
-module "aws_wordpress" {
-  source        = "./modules/aws_autoscaling"
-  sg_id         = [module.aws_sg_wordpress.sg_id]
-  key           = "wordpress-key"
-  instance_type = "t2.micro"
-  user_data     = module.aws_user_data_wordpress.user_data
-  subnet_ids    = [module.aws_network.private_subnet1_id, module.aws_network.private_subnet2_id]
-}
-
-module "aws_ec2_bastion" {
-  source        = "./modules/aws_ec2"
-  instance_type = "t2.micro"
-  key           = "bastion-key"
-  subnet_id     = module.aws_network.public_subnet1_id
-  user_data     = module.aws_user_data_bastion.user_data
-  vpc_sg_ids    = [module.aws_sg_bastion.sg_id]
-  name          = "bastion"
-  owner         = local.common_tags.owner
-  email         = local.common_tags.email
-  env           = local.common_tags.env
-  command       = <<-EOT
+resource "null_resource" "ansible_config" {
+  provisioner "local-exec" {
+    command = <<-EOT
   echo "$(aws ec2 describe-instances --region us-east-1 --instance-ids $(aws autoscaling describe-auto-scaling-instances --region us-east-1 --output text \
 --query "AutoScalingInstances[?AutoScalingGroupName=='${module.aws_wordpress.name}'].InstanceId") --query "Reservations[].Instances[].PrivateIpAddress" --output text)" > ./ansible/hosts.txt
-    sed -i.bak 's/\t/\n/g' ./ansible/hosts.txt
+  sed -i.bak 's/\t/\n/g' ./ansible/hosts.txt
+  sed -i 's/-q ubuntu@.* -o I/-q ubuntu@${module.aws_ec2_bastion.public_ip} -o I/' ./ansible/group_vars/all
   echo "${module.aws_ec2_master[0].private_ip}
   ${module.aws_ec2_master[1].private_ip}
   ${module.aws_ec2_nodes[0].private_ip}
@@ -67,6 +49,30 @@ module "aws_ec2_bastion" {
   ff02::1 ip6-allnodes 
   ff02::2 ip6-allrouters" > ./ansible/conf/hosts
   EOT
+  }
+}
+
+############################################## EC2 INSTANCES ##############################################
+module "aws_wordpress" {
+  source        = "./modules/aws_autoscaling"
+  sg_id         = [module.aws_sg_wordpress.sg_id]
+  key           = "wordpress-key"
+  instance_type = "t2.micro"
+  user_data     = module.aws_user_data_wordpress.user_data
+  subnet_ids    = [module.aws_network.private_subnet1_id, module.aws_network.private_subnet2_id]
+}
+
+module "aws_ec2_bastion" {
+  source        = "./modules/aws_ec2"
+  instance_type = "t2.micro"
+  key           = "bastion-key"
+  subnet_id     = module.aws_network.public_subnet1_id
+  user_data     = module.aws_user_data_bastion.user_data
+  vpc_sg_ids    = [module.aws_sg_bastion.sg_id]
+  name          = "bastion"
+  owner         = local.common_tags.owner
+  email         = local.common_tags.email
+  env           = local.common_tags.env
 }
 
 module "aws_ec2_kibana" {

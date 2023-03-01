@@ -37,9 +37,3 @@ variable "email"{
 variable "env"{
     type = string
 }
-
-variable "command"{
-    default = <<-EOT
-    echo "ec2 is created"
-    EOT
-}

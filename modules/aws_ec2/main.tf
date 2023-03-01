@@ -21,7 +21,4 @@ resource "aws_instance" "app_server" {
     email = var.email
     env = var.env
   }
-  provisioner "local-exec"{
-    command = var.command
-  }
 }
